@@ -37,6 +37,18 @@ jobs:
 
     name: Build - ${{ matrix.config.os }} ${{ matrix.config.arch }}
     steps:
+      - name: Install MSVC ARM64 Tools (Windows ARM64)
+        if: matrix.config.os == 'Windows' && matrix.config.arch == 'arm64'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+
+      - name: Install Dependencies (Linux ARM64)
+        if: matrix.config.os == 'Linux' && matrix.config.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu cmake
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -45,24 +57,20 @@ jobs:
       - name: Update Submodules
         run: git submodule update --init --recursive
 
-      - name: Install Dependencies (Linux ARM64)
-        if: matrix.config.os == 'Linux' && matrix.config.arch == 'arm64'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu cmake
-
-      - name: Install MSVC ARM64 Tools (Windows ARM64)
-        if: matrix.config.os == 'Windows' && matrix.config.arch == 'arm64'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: arm64
-
       - name: Build (x64)
         if: matrix.config.arch == 'x64'
         run: |
           mkdir build
           cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release
+
+      - name: Build (Windows ARM64)
+        if: matrix.config.os == 'Windows' && matrix.config.arch == 'arm64'
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -A ARM64
           cmake --build . --config Release
 
       - name: Build (Linux ARM64)
@@ -87,13 +95,38 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=arm64
           cmake --build . --config Release
 
-      - name: Build (Windows ARM64)
-        if: matrix.config.os == 'Windows' && matrix.config.arch == 'arm64'
-        run: |
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -A ARM64
-          cmake --build . --config Release
-
       - name: List Files
         run: ls -R build
+
+      - name: Upload (Windows)
+        if: matrix.config.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: output_${{ matrix.config.name }}
+          path: |
+            build/Release/dxil-extract.exe
+            build/Release/dxil-spirv.exe
+            build/Release/dxil-spirv-c-shared.dll
+          if-no-files-found: error
+
+      - name: Upload (Linux)
+        if: matrix.config.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: output_${{ matrix.config.name }}
+          path: |
+            build/dxil-extract
+            build/dxil-spirv
+            build/libdxil-spirv-c-shared.so
+          if-no-files-found: error
+
+      - name: Upload (MacOS)
+        if: matrix.config.os == 'MacOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: output_${{ matrix.config.name }}
+          path: |
+            build/dxil-extract
+            build/dxil-spirv
+            build/libdxil-spirv-c-shared.dylib
+          if-no-files-found: error
