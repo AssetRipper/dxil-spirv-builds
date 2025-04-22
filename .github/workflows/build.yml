@@ -96,7 +96,7 @@ jobs:
           cmake --build . --config Release
 
       - name: List Files
-        run: ls build/Release
+        run: ls -R
 
       - name: Upload
         uses: actions/upload-artifact@v4
