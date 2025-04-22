@@ -22,39 +22,52 @@ on:
 # * * * * *
 
 jobs:
-  build_linux_x64:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ${{ matrix.config.runner }}
 
+    strategy:
+      matrix:
+        config:
+          - { name: win_x64, runner: windows-latest, os: Windows, arch: x64 }
+          - { name: win_arm64, runner: windows-latest, os: Windows, arch: arm64 }
+          - { name: linux_x64, runner: ubuntu-22.04, os: Linux, arch: x64 }
+          - { name: linux_arm64, runner: ubuntu-22.04, os: Linux, arch: arm64 }
+          - { name: mac_x64, runner: macos-latest, os: MacOS, arch: x64 }
+          - { name: mac_arm64, runner: macos-latest, os: MacOS, arch: arm64 }
+
+    name: Build - ${{ matrix.config.os }} ${{ matrix.config.arch }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           repository: 'AssetRipper/dxil-spirv'
-      - name: Build
+
+      - name: Update Submodules
+        run: git submodule update --init --recursive
+
+      - name: Install Dependencies (Linux ARM64)
+        if: matrix.config.os == 'Linux' && matrix.config.arch == 'arm64'
         run: |
-          git submodule update --init --recursive
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu cmake
+
+      - name: Install MSVC ARM64 Tools (Windows ARM64)
+        if: matrix.config.os == 'Windows' && matrix.config.arch == 'arm64'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+
+      - name: Build (x64)
+        if: matrix.config.arch == 'x64'
+        run: |
           mkdir build
           cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
 
-  build_linux_arm64:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          repository: 'AssetRipper/dxil-spirv'
-
-      - name: Install Dependencies
+      - name: Build (Linux ARM64)
+        if: matrix.config.os == 'Linux' && matrix.config.arch == 'arm64'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu cmake
-
-      - name: Build (Cross Compile for Arm64)
-        run: |
-          git submodule update --init --recursive
           mkdir build
           cd build
           cmake .. -DCMAKE_SYSTEM_NAME=Linux \
@@ -64,34 +77,9 @@ jobs:
                    -DCMAKE_BUILD_TYPE=Release
           cmake --build . --config Release
 
-  build_macos_x64:
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          repository: 'AssetRipper/dxil-spirv'
-      - name: Build
+      - name: Build (macOS ARM64)
+        if: matrix.config.os == 'MacOS' && matrix.config.arch == 'arm64'
         run: |
-          git submodule update --init --recursive
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release
-
-  build_macos_arm64:
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          repository: 'AssetRipper/dxil-spirv'
-
-      - name: Build for macOS arm64
-        run: |
-          git submodule update --init --recursive
           mkdir build
           cd build
           cmake .. \
@@ -99,40 +87,20 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=arm64
           cmake --build . --config Release
 
-  build_windows_x64:
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          repository: 'AssetRipper/dxil-spirv'
-      - name: Build
+      - name: Build (Windows ARM64)
+        if: matrix.config.os == 'Windows' && matrix.config.arch == 'arm64'
         run: |
-          git submodule update --init --recursive
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release
-
-  build_windows_arm64:
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          repository: 'AssetRipper/dxil-spirv'
-
-      - name: Install MSVC ARM64 Tools
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: arm64
-
-      - name: Build
-        run: |
-          git submodule update --init --recursive
           mkdir build
           cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release -A ARM64
           cmake --build . --config Release
+
+      - name: List Files
+        run: ls build/Release
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: output_${{ matrix.config.name }}
+          path: build/Release/
+          if-no-files-found: error
