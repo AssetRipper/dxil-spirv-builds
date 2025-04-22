@@ -22,6 +22,22 @@ on:
 # * * * * *
 
 jobs:
+  include:
+    runs-on: ubuntu-latest
+    name: Include Files
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: 'AssetRipper/dxil-spirv'
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: include_files
+          path: dxil_spirv_c.h
+          if-no-files-found: error
+
   build:
     runs-on: ${{ matrix.config.runner }}
 
